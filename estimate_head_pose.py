@@ -12,6 +12,7 @@ import mark_detector
 import optical_flow_tracker
 import point_stabilizer
 import pose_estimator
+import time
 
 INPUT_SIZE = 128
 
@@ -38,8 +39,11 @@ def main():
     frame_count = 0
     tracker_threshold = 2
 
+    timer = time.time()
     while True:
         # Read frame, crop it, flip it, suits your needs.
+        print('time elapsed:', time.time() - timer)
+        timer = time.time()
         frame_got, frame = cam.read()
         if frame_got is False:
             break
