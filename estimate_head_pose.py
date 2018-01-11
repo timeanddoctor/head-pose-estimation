@@ -19,8 +19,13 @@ INPUT_SIZE = 128
 def main():
     """MAIN"""
     # Get frame from webcam or video file
-    video_src = 0
+    video_src = "/home/robin/Documents/landmark/dataset/300VW_Dataset_2015_12_14/009/vid.avi"
     cam = cv2.VideoCapture(video_src)
+    print('video initilization succced.')
+
+    # Video output by video writer.
+    video_writer = cv2.VideoWriter(
+        'output.avi', cv2.VideoWriter_fourcc('M', 'J', 'P', 'G'), 25, (640, 480))
 
     # Introduce point stabilizers for landmarks.
     stabilizers = [point_stabilizer.Stabilizer(
@@ -42,10 +47,11 @@ def main():
         # Read frame, crop it, flip it, suits your needs.
         frame_got, frame = cam.read()
         if frame_got is False:
+            print('End of file, quit.')
             break
 
         # Crop it if frame is larger than expected.
-        # frame = frame[0:480, 300:940]
+        frame = frame[0:480, 300:940]
 
         # If frame comes from webcam, flip it so it looks like a mirror.
         if video_src == 0:
@@ -142,8 +148,8 @@ def main():
             # Filters re-configured, stabilize the marks.
             for point, stabilizer in zip(landmarks, stabilizers):
                 stabilizer.update(point)
-                stabile_marks.append([stabilizer.prediction[0],
-                                      stabilizer.prediction[1]])
+                stabile_marks.append([stabilizer.filter.statePost[0],
+                                      stabilizer.filter.statePost[1]])
 
             # Uncomment following line to show stabile marks.
             # mark_detector.draw_marks(frame_cnn, stabile_marks)
@@ -159,6 +165,9 @@ def main():
 
         # Show preview.
         cv2.imshow("Preview", frame_cnn)
+
+        # Write video file.
+        video_writer.write(frame_cnn)
 
         if cv2.waitKey(10) == 27:
             break
