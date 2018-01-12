@@ -16,6 +16,35 @@ import pose_estimator
 INPUT_SIZE = 128
 
 
+def refine_mark_by_flow(frame, mark, img_prev):
+    """Refine landmark by dense optical flow."""
+    # Get left eye left corner.
+    local_x = int(mark[0])
+    local_y = int(mark[1])
+
+    # Extract local area.
+    local_box = [local_x - 12, local_y - 12,
+                 local_x + 12, local_y + 12]
+
+    if mark_detector.box_in_image(local_box, frame):
+        local_img = frame[local_box[1]:local_box[3],
+                          local_box[0]:local_box[2]]
+        local_img_gray = cv2.cvtColor(
+            local_img, cv2.COLOR_BGR2GRAY)
+
+        dense_flow = cv2.calcOpticalFlowFarneback(img_prev,
+                                                  local_img_gray,
+                                                  None,
+                                                  0.5, 3, 15, 3, 5, 1.2, 0)
+
+        temp = np.sum(dense_flow, axis=0)
+        shift_x, shift_y = np.sum(temp, axis=0).flatten() / \
+            (dense_flow.shape[0] * dense_flow.shape[1])
+
+        return [mark[0] + shift_x, mark[1] + shift_y], local_img_gray
+    return None, None
+
+
 def main():
     """MAIN"""
     # Get frame from webcam or video file
@@ -46,7 +75,7 @@ def main():
     # tracker_threshold = 2
 
     # Dense flow track
-    local_img_prev = np.zeros((24, 24), dtype=np.int8)
+    local_imgs_prev = [np.zeros((24, 24), dtype=np.int8) for _ in range(6)]
 
     while True:
         # Read frame, crop it, flip it, suits your needs.
@@ -132,34 +161,35 @@ def main():
             stabile_marks[:, 0] += facebox[0]
             stabile_marks[:, 1] += facebox[1]
 
+            # Refine marks by dense flow.
+            marks_refined = [marks[i] for i in [30, 8, 36, 45, 48, 54]]
+            for idx, mark_idx in enumerate([30, 8, 36, 45, 48, 54]):
+                fine_mark, local_imgs_prev[idx] = refine_mark_by_flow(
+                    frame_cnn, marks[mark_idx], local_imgs_prev[idx])
+                if fine_mark is not None:
+                    marks_refined[idx] = fine_mark
+
+            # Uncomment the following line to show raw marks.
+            mark_detector.draw_marks(frame_cnn, marks, color=(255, 255, 255))
+            mark_detector.draw_marks(
+                frame_cnn, marks_refined, color=(0, 255, 0))
+            mark_detector.draw_marks(
+                frame_cnn, stabile_marks, color=(255, 0, 0))
+
             # Get left eye left corner.
-            local_x = int(marks[36, 0])
-            local_y = int(marks[36, 1])
+            local_x = int(stabile_marks[36][0])
+            local_y = int(stabile_marks[36][1])
 
             # Extract local area.
             local_box = [local_x - 12, local_y - 12,
                          local_x + 12, local_y + 12]
-            if mark_detector.box_in_image(local_box, frame_cnn):
+
+            if mark_detector.box_in_image(local_box, frame):
                 local_img = frame_cnn[local_box[1]:local_box[3],
                                       local_box[0]:local_box[2]]
-                local_img_gray = cv2.cvtColor(local_img, cv2.COLOR_BGR2GRAY)
-                dense_flow = cv2.calcOpticalFlowFarneback(local_img_prev,
-                                                          local_img_gray,
-                                                          None,
-                                                          0.5, 3, 15, 3, 5, 1.2, 0)
-                for row in range(2, 24, 6):
-                    for col in range(2, 24, 6):
-                        fx, fy = dense_flow[row, col].T
-                        cv2.circle(local_img, (row + int(fx), col + int(fy)), 1, (0, 255, 0), -1)
-
-                local_img_prev = local_img_gray
-
                 local_img = cv2.resize(
                     local_img, (512, 512), interpolation=cv2.INTER_AREA)
-                cv2.imshow("LOCAL", local_img)
-
-            # Uncomment the following line to show raw marks.
-            # mark_detector.draw_marks(frame_cnn, landmarks)
+                cv2.imshow('local', local_img)
 
             # All kind of detections face a common issue: jitter. Usually this is
             # solved by kinds of estimators, like partical filter or Kalman filter, etc.
@@ -200,8 +230,10 @@ def main():
             #     frame_cnn, stabile_marks, color=(255, 0, 0))
 
             # Try pose estimation
-            pose_marks = pose_estimator.get_pose_marks(stabile_marks)
+            pose_marks = pose_estimator.get_pose_marks(marks)
+            pose_marks = marks_refined
             pose_marks = np.array(pose_marks, dtype=np.float32)
+
             pose = pose_estimator.solve_pose(pose_marks)
 
             # Stabilize the pose.
@@ -213,13 +245,18 @@ def main():
             stabile_pose = np.reshape(stabile_pose, (-1, 3))
 
             # Draw pose annotaion on frame.
-            frame_cnn = pose_estimator.draw_annotation_box(
-                frame_cnn, pose[0], pose[1])
             # frame_cnn = pose_estimator.draw_annotation_box(
-            #     frame_cnn, stabile_pose[0], stabile_pose[1], color=(0, 255, 0))
+            #     frame_cnn, pose[0], pose[1])
+            frame_cnn = pose_estimator.draw_annotation_box(
+                frame_cnn, stabile_pose[0], stabile_pose[1], color=(0, 255, 0))
 
         # Show preview.
         cv2.imshow("Preview", frame_cnn)
+
+        debug_img = frame_cnn[200:224, 300:324]
+        debug_img = cv2.resize(
+            debug_img, (512, 512), interpolation=cv2.INTER_AREA)
+        cv2.imshow('debug', debug_img)
 
         if cv2.waitKey(10) == 27:
             break
