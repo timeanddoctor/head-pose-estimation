@@ -14,6 +14,7 @@ FACE_NET = cv2.dnn.readNetFromCaffe(DNN_PROTOTXT, DNN_MODEL)
 
 CNN_INPUT_SIZE = 128
 MARK_MODEL = 'assets/frozen_inference_graph.pb'
+LOCAL_MODEL_36 = 'assets/local_mark.pb'
 
 
 def get_faceboxes(image=None, threshold=0.5):
@@ -171,6 +172,23 @@ def detect_marks(image_np, sess, detection_graph):
     marks = np.reshape(marks, (-1, 2))
 
     return marks
+
+
+LOCAL_GRAPH_36, LOCAL_SESS_36 = get_tf_session(
+    inference_pb_file=LOCAL_MODEL_36)
+
+
+def refine_eye_left(image_np):
+    """Refine mark of left eye left cornet"""
+    # Get result tensor by its name.
+    logits_tensor = LOCAL_GRAPH_36.get_tensor_by_name('transpose:0')
+
+    # Actual detection.
+    predictions = LOCAL_SESS_36.run(
+        logits_tensor,
+        feed_dict={'input_image_tensor:0': image_np})
+
+    return np.array(predictions).flatten()
 
 
 def draw_marks(image, marks, color=None):

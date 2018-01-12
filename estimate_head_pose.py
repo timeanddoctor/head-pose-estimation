@@ -50,6 +50,7 @@ def main():
         # If frame comes from webcam, flip it so it looks like a mirror.
         if video_src == 0:
             frame = cv2.flip(frame, 2)
+        frame = cv2.blur(frame, (9, 9))
 
         # Draw a dark background for user state text on frame.
         cv2.rectangle(frame, (4, 28), (70, 4), (70, 70, 70), -1)
@@ -110,8 +111,24 @@ def main():
             landmarks[:, 0] += facebox[0]
             landmarks[:, 1] += facebox[1]
 
-            # Uncomment the following line to show raw marks.
+            # Get left eye left corner.
+            local_x = int(landmarks[36, 0])
+            local_y = int(landmarks[36, 1])
+
+            # Extract local area.
+            local_box = [local_x - 12, local_y - 12,
+                         local_x + 12, local_y + 12]
+            if mark_detector.box_in_image(local_box, frame_cnn):
+                local_img = frame_cnn[local_box[1]:local_box[3],
+                                      local_box[0]:local_box[2]]
+
+            # # Refine detection
+            point_refined = mark_detector.refine_eye_left(local_img) * 24
+
+            # # Uncomment the following line to show raw marks.
             # mark_detector.draw_marks(frame_cnn, landmarks)
+            # cv2.circle(frame_cnn, (int(point_refined[0] + local_box[0]), int(
+            #     point_refined[1] + local_box[1])), 1, (0, 255, 0), -1)
 
             # All kind of detections face a common issue: jitter. Usually this is
             # solved by kinds of estimators, like partical filter or Kalman filter, etc.
@@ -146,7 +163,7 @@ def main():
                                       stabilizer.filter.statePost[1]])
 
             # Uncomment following line to show stabile marks.
-            mark_detector.draw_marks(frame_cnn, stabile_marks)
+            # mark_detector.draw_marks(frame_cnn, stabile_marks, color=(255, 0, 0))
 
             # Try pose estimation
             pose_marks = pose_estimator.get_pose_marks(stabile_marks)
@@ -154,12 +171,20 @@ def main():
             pose = pose_estimator.solve_pose(pose_marks)
 
             # Draw pose annotaion on frame.
-            frame_cnn = pose_estimator.draw_annotation_box(
-                frame_cnn, pose[0], pose[1])
+            # frame_cnn = pose_estimator.draw_annotation_box(
+            #     frame_cnn, pose[0], pose[1])
+
+            # frame_local = frame_cnn[200:300, 300:400]
+            # frame_local = frame_cnn[local_box[1]:local_box[3],
+            #                         local_box[0]:local_box[2]]
+            frame_local = frame_cnn[facebox[1]: facebox[3],
+                                    facebox[0]: facebox[2]]
+            frame_local = cv2.resize(
+                frame_local, (512, 512), interpolation=cv2.INTER_AREA)
+            cv2.imshow("local", frame_local)
 
         # Show preview.
         cv2.imshow("Preview", frame_cnn)
-
         if cv2.waitKey(10) == 27:
             break
 
