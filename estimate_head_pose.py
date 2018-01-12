@@ -45,6 +45,9 @@ def main():
     # frame_count = 0
     # tracker_threshold = 2
 
+    # Dense flow track
+    local_img_prev = np.zeros((24, 24), dtype=np.int8)
+
     while True:
         # Read frame, crop it, flip it, suits your needs.
         frame_got, frame = cam.read()
@@ -129,6 +132,32 @@ def main():
             stabile_marks[:, 0] += facebox[0]
             stabile_marks[:, 1] += facebox[1]
 
+            # Get left eye left corner.
+            local_x = int(marks[36, 0])
+            local_y = int(marks[36, 1])
+
+            # Extract local area.
+            local_box = [local_x - 12, local_y - 12,
+                         local_x + 12, local_y + 12]
+            if mark_detector.box_in_image(local_box, frame_cnn):
+                local_img = frame_cnn[local_box[1]:local_box[3],
+                                      local_box[0]:local_box[2]]
+                local_img_gray = cv2.cvtColor(local_img, cv2.COLOR_BGR2GRAY)
+                dense_flow = cv2.calcOpticalFlowFarneback(local_img_prev,
+                                                          local_img_gray,
+                                                          None,
+                                                          0.5, 3, 15, 3, 5, 1.2, 0)
+                for row in range(2, 24, 6):
+                    for col in range(2, 24, 6):
+                        fx, fy = dense_flow[row, col].T
+                        cv2.circle(local_img, (row + int(fx), col + int(fy)), 1, (0, 255, 0), -1)
+
+                local_img_prev = local_img_gray
+
+                local_img = cv2.resize(
+                    local_img, (512, 512), interpolation=cv2.INTER_AREA)
+                cv2.imshow("LOCAL", local_img)
+
             # Uncomment the following line to show raw marks.
             # mark_detector.draw_marks(frame_cnn, landmarks)
 
@@ -184,10 +213,10 @@ def main():
             stabile_pose = np.reshape(stabile_pose, (-1, 3))
 
             # Draw pose annotaion on frame.
-            # frame_cnn = pose_estimator.draw_annotation_box(
-            #     frame_cnn, pose[0], pose[1])
             frame_cnn = pose_estimator.draw_annotation_box(
-                frame_cnn, stabile_pose[0], stabile_pose[1], color=(0, 255, 0))
+                frame_cnn, pose[0], pose[1])
+            # frame_cnn = pose_estimator.draw_annotation_box(
+            #     frame_cnn, stabile_pose[0], stabile_pose[1], color=(0, 255, 0))
 
         # Show preview.
         cv2.imshow("Preview", frame_cnn)
