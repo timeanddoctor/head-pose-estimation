@@ -15,6 +15,7 @@ MODEL_POINTS = np.array([
     (150.0, -150.0, -125.0)      # Right mouth corner
 ])
 
+
 # Camera internals
 FOCAL_LENGTH = SIZE[1]
 CAMERA_CENTER = (SIZE[1] / 2, SIZE[0] / 2)
@@ -36,7 +37,15 @@ def get_full_model_points(filename='assets/model.txt'):
             raw_value.append(line)
     model_points = np.array(raw_value, dtype=np.float32)
     model_points = np.reshape(model_points, (3, -1)).T
+    model_points *= 4.5
+    model_points[:, 2] *= -1
+    # model_points[:, 1] *= -1
+    model_points[:, 0] *= -1
     return model_points
+
+
+TVEC = None
+RVEC = None
 
 
 def solve_pose(image_points):
@@ -44,8 +53,17 @@ def solve_pose(image_points):
     Solve pose from image points
     Return (rotation_vector, translation_vector) as pose.
     """
-    (success, rotation_vector, translation_vector) = cv2.solvePnP(
-        MODEL_POINTS, image_points, CAMERA_MATRIX, DIST_COEFFS)
+    global TVEC, RVEC
+    if TVEC is None:
+        (success, rotation_vector, translation_vector) = cv2.solvePnP(
+            MODEL_POINTS, image_points, CAMERA_MATRIX, DIST_COEFFS)
+        TVEC = translation_vector
+        RVEC = rotation_vector
+    else:
+        (success, rotation_vector, translation_vector) = cv2.solvePnP(
+            MODEL_POINTS, image_points, CAMERA_MATRIX, DIST_COEFFS, rvec=RVEC, tvec=TVEC, useExtrinsicGuess=True)
+    if success is False:
+        print("PnP failed!")
 
     return (rotation_vector, translation_vector)
 
