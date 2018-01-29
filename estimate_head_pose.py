@@ -5,6 +5,8 @@ detection. The facial landmark detection is done by a custom Convolutional
 Neural Network trained with TensorFlow. After that, head pose is estimated
 by solving a PnP problem.
 """
+from multiprocessing import Process, Queue
+
 import numpy as np
 
 import cv2
@@ -15,22 +17,37 @@ from stabilizer import Stabilizer
 CNN_INPUT_SIZE = 128
 
 
+def get_face(detector, img_queue, box_queue):
+    """Get face from image queue. This function is used for multiprocessing"""
+    while True:
+        image = img_queue.get()
+        box = detector.extract_cnn_facebox(image)
+        box_queue.put(box)
+
+
 def main():
     """MAIN"""
     # Get frame from webcam or video file
     video_src = "/home/robin/Documents/landmark/dataset/300VW_Dataset_2015_12_14/009/vid.avi"
     cam = cv2.VideoCapture(video_src)
+    _, sample_frame = cam.read()
     print('video initilization succced.')
-
-    # Video output by video writer.
-    video_writer = cv2.VideoWriter(
-        'output.avi', cv2.VideoWriter_fourcc('M', 'J', 'P', 'G'), 25, (640, 480))
 
     # Introduce mark_detector to detect landmarks.
     mark_detector = MarkDetector()
 
-    # Introduce pose estimator to solve pose.
-    pose_estimator = PoseEstimator(img_size=(480, 640))
+    # Setup process and queues for multiprocessing.
+    img_queue = Queue()
+    box_queue = Queue()
+    img_queue.put(sample_frame)
+    box_process = Process(target=get_face, args=(
+        mark_detector, img_queue, box_queue,))
+    box_process.start()
+
+    # Introduce pose estimator to solve pose. Get one frame to setup the
+    # estimator according to the image size.
+    height, width = sample_frame.shape[:2]
+    pose_estimator = PoseEstimator(img_size=(height, width))
 
     # Introduce scalar stabilizers for pose.
     pose_stabilizers = [Stabilizer(
@@ -38,6 +55,10 @@ def main():
         measure_num=1,
         cov_process=0.1,
         cov_measure=0.1) for _ in range(6)]
+
+    # Video output by video writer.
+    video_writer = cv2.VideoWriter(
+        'output.avi', cv2.VideoWriter_fourcc('M', 'J', 'P', 'G'), 30, (width, height))
 
     while True:
         # Read frame, crop it, flip it, suits your needs.
@@ -47,7 +68,7 @@ def main():
             break
 
         # Crop it if frame is larger than expected.
-        frame = frame[0:480, 300:940]
+        # frame = frame[0:480, 300:940]
 
         # If frame comes from webcam, flip it so it looks like a mirror.
         if video_src == 0:
@@ -57,7 +78,13 @@ def main():
         # 1. detect face;
         # 2. detect landmarks;
         # 3. estimate pose
-        facebox = mark_detector.extract_cnn_facebox(frame)
+
+        # Feed frame to image queue.
+        img_queue.put(frame)
+
+        # Get face from box queue.
+        facebox = box_queue.get()
+
         if facebox is not None:
             # Detect landmarks from image of 128x128.
             face_img = frame[facebox[1]: facebox[3],
@@ -73,7 +100,7 @@ def main():
 
             # Uncomment following line to show raw marks.
             # mark_detector.draw_marks(
-            #     frame_cnn, marks, color=(0, 255, 0))
+            #     frame, marks, color=(0, 255, 0))
 
             # Try pose estimation with 68 points.
             pose = pose_estimator.solve_pose_by_68_points(marks)
@@ -96,12 +123,15 @@ def main():
 
         # Show preview.
         cv2.imshow("Preview", frame)
+        if cv2.waitKey(10) == 27:
+            break
 
         # Write video file.
         video_writer.write(frame)
 
-        if cv2.waitKey(10) == 27:
-            break
+    # Clean up the multiprocessing process.
+    box_process.terminate()
+    box_process.join()
 
 
 if __name__ == '__main__':

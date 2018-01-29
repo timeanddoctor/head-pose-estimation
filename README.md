@@ -1,23 +1,31 @@
 # Head pose estimation
 
-Use CNN and OpenCV to estimate head poses.
+This repo shows how to estimate human head pose from videos using TensorFlow and OpenCV.
 
 ![demo](https://github.com/yinguobing/head-pose-estimation/raw/master/demo.gif)
+![demo](https://github.com/yinguobing/head-pose-estimation/raw/master/demo1.gif)
 
 ## How it works
 
-This repo shows how to detect human head pose from image.
+There are three major steps:
 
-There are three major steps in the code, listed below.
+1. Face detection. A face detector is adopted to provide a face box containing a human face. Then the face box is expanded and transformed to a square to suit the needs of later steps.
 
-1. Face detection. I use an face detector in OpenCV which provides a box contains a human face. The box is expanded and transformed to a square to suit the need of later step.
-
-2. Facial landmark detection. In this step, a custom trained facial landmark detector based on TensorFlow is responsible for output 68 facial landmarks from face image of step 1.
+2. Facial landmark detection. A custom trained facial landmark detector based on TensorFlow is responsible for output 68 facial landmarks.
 
 3. Pose estimation. Once we got the 68 facial landmarks, a mutual PnP algorithms is adopted to calculate the pose.
 
-## Other important techniques
+## Miscellaneous
+- The marks is detected frame by frame, which result in small variance between adjacent frames. This makes the pose unstaible. A Kalman filter is used to solve this problem, you can draw the original pose to observe the difference.
 
-A Kalman filter is used to stabilize the facial landmarks.
+- The 3D model of face comes from OpenFace, you can find the original file [here](https://github.com/TadasBaltrusaitis/OpenFace/blob/master/lib/local/LandmarkDetector/model/pdms/In-the-wild_aligned_PDM_68.txt).
 
-A optical flow tracker is used to detect head motion, which is useful for setting kalman filter parameters.
+## License
+The code is licensed under the MIT license. However, the pre-trained TensorFlow model file is trained with various public data sets which have their own licenses. Please refer to them before using this code.
+
+- 300-W: https://ibug.doc.ic.ac.uk/resources/300-W/
+- 300-VW: https://ibug.doc.ic.ac.uk/resources/300-VW/
+- LFPW: https://neerajkumar.org/databases/lfpw/
+- HELEN: http://www.ifp.illinois.edu/~vuongle2/helen/
+- AFW: https://www.ics.uci.edu/~xzhu/face/
+- IBUG: https://ibug.doc.ic.ac.uk/resources/facial-point-annotations/
