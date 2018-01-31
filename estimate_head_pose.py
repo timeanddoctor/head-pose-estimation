@@ -5,7 +5,7 @@ detection. The facial landmark detection is done by a custom Convolutional
 Neural Network trained with TensorFlow. After that, head pose is estimated
 by solving a PnP problem.
 """
-from multiprocessing import Process, Queue
+from multiprocessing import Pool, Queue
 
 import numpy as np
 
@@ -17,31 +17,10 @@ from stabilizer import Stabilizer
 CNN_INPUT_SIZE = 128
 
 
-def get_face(detector, img_queue, box_queue):
-    """Get face from image queue. This function is used for multiprocessing"""
-    while True:
-        image = img_queue.get()
-        box = detector.extract_cnn_facebox(image)
-        box_queue.put(box)
-
-
-def main():
-    """MAIN"""
-    # Video source from webcam or video file.
-    video_src = 0
-    cam = cv2.VideoCapture(video_src)
-    _, sample_frame = cam.read()
-
+def worker(sample_frame, input_queue, output_queue):
+    """For use of multiprocessing.Pool"""
     # Introduce mark_detector to detect landmarks.
     mark_detector = MarkDetector()
-
-    # Setup process and queues for multiprocessing.
-    img_queue = Queue()
-    box_queue = Queue()
-    img_queue.put(sample_frame)
-    box_process = Process(target=get_face, args=(
-        mark_detector, img_queue, box_queue,))
-    box_process.start()
 
     # Introduce pose estimator to solve pose. Get one frame to setup the
     # estimator according to the image size.
@@ -56,28 +35,14 @@ def main():
         cov_measure=0.1) for _ in range(6)]
 
     while True:
-        # Read frame, crop it, flip it, suits your needs.
-        frame_got, frame = cam.read()
-        if frame_got is False:
-            break
-
-        # Crop it if frame is larger than expected.
-        # frame = frame[0:480, 300:940]
-
-        # If frame comes from webcam, flip it so it looks like a mirror.
-        if video_src == 0:
-            frame = cv2.flip(frame, 2)
-
         # Pose estimation by 3 steps:
         # 1. detect face;
         # 2. detect landmarks;
         # 3. estimate pose
-
-        # Feed frame to image queue.
-        img_queue.put(frame)
+        frame = input_queue.get()
 
         # Get face from box queue.
-        facebox = box_queue.get()
+        facebox = mark_detector.extract_cnn_facebox(frame)
 
         if facebox is not None:
             # Detect landmarks from image of 128x128.
@@ -115,14 +80,48 @@ def main():
             pose_estimator.draw_annotation_box(
                 frame, stabile_pose[0], stabile_pose[1], color=(128, 255, 128))
 
+        # Put result in output queue.
+        output_queue.put(frame)
+
+
+def main():
+    """MAIN"""
+    # Video source from webcam or video file.
+    video_src = 0
+    cam = cv2.VideoCapture(video_src)
+    _, sample_frame = cam.read()
+
+    # Multiprocessing setup.
+    input_q = Queue(maxsize=20)
+    output_q = Queue(maxsize=20)
+    pool = Pool(5, worker, (sample_frame, input_q, output_q))
+
+    while True:
+        # Read frame, crop it, flip it, suits your needs.
+        frame_got, frame = cam.read()
+        if frame_got is False:
+            break
+
+        # Crop it if frame is larger than expected.
+        # frame = frame[0:480, 300:940]
+
+        # If frame comes from webcam, flip it so it looks like a mirror.
+        if video_src == 0:
+            frame = cv2.flip(frame, 2)
+
+        # Update frame queue.
+        input_q.put(frame)
+
+        # Get detection result.
+        result_frame = output_q.get()
+
         # Show preview.
-        cv2.imshow("Preview", frame)
+        cv2.imshow("Preview", result_frame)
         if cv2.waitKey(10) == 27:
             break
 
     # Clean up the multiprocessing process.
-    box_process.terminate()
-    box_process.join()
+    pool.terminate()
 
 
 if __name__ == '__main__':
