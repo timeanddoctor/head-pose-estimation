@@ -58,7 +58,7 @@ def main():
 
     # Video output by video writer.
     video_writer = cv2.VideoWriter(
-        'output.avi', cv2.VideoWriter_fourcc('M', 'J', 'P', 'G'), 30, (width, height))
+        'output.avi', cv2.VideoWriter_fourcc(*'x264'), 30, (width, height))
 
     while True:
         # Read frame, crop it, flip it, suits your needs.
