@@ -93,6 +93,10 @@ def main():
 
             # Preview heatmaps.
             heatmap = np.sum(marks, axis=2)
+            heatmap = marks[:, :, 30]
+            max_y, max_x = np.unravel_index(np.argmax(heatmap, axis=None), heatmap.shape)
+            heatmap = cv2.cvtColor(heatmap, cv2.COLOR_GRAY2BGR)
+            cv2.circle(heatmap, (max_x, max_y), 1, (0,255,0))
             heatmap_large = cv2.resize(heatmap, (512, 512), interpolation=cv2.INTER_AREA)
             cv2.imshow("map", heatmap_large)
 
