@@ -63,7 +63,7 @@ class FaceDetector:
 class MarkDetector:
     """Facial landmark detector by Convolutional Neural Network"""
 
-    def __init__(self, mark_model='assets/frozen_inference_graph.pb'):
+    def __init__(self, mark_model='assets/heatmap.pb'):
         """Initialization"""
         # A face detector is required for mark detection.
         self.face_detector = FaceDetector()
@@ -162,18 +162,17 @@ class MarkDetector:
     def detect_marks(self, image_np):
         """Detect marks from image"""
         # Get result tensor by its name.
-        logits_tensor = self.graph.get_tensor_by_name('logits/BiasAdd:0')
+        heatmap_tensor = self.graph.get_tensor_by_name('heatmap:0')
 
         # Actual detection.
         predictions = self.sess.run(
-            logits_tensor,
+            heatmap_tensor,
             feed_dict={'input_image_tensor:0': image_np})
 
-        # Convert predictions to landmarks.
-        marks = np.array(predictions).flatten()
-        marks = np.reshape(marks, (-1, 2))
+        # TODO: Convert heatmaps to landmarks.
+        marks = np.array(predictions)
 
-        return marks
+        return marks[0]
 
     @staticmethod
     def draw_marks(image, marks, color=(255, 255, 255)):
