@@ -91,33 +91,38 @@ def main():
             face_img = cv2.cvtColor(face_img, cv2.COLOR_BGR2RGB)
             marks = mark_detector.detect_marks(face_img)
 
-            # Convert the marks locations from local CNN to global image.
-            marks *= (facebox[2] - facebox[0])
-            marks[:, 0] += facebox[0]
-            marks[:, 1] += facebox[1]
+            # Preview heatmaps.
+            heatmap = np.sum(marks, axis=2)
+            heatmap_large = cv2.resize(heatmap, (512, 512), interpolation=cv2.INTER_AREA)
+            cv2.imshow("map", heatmap_large)
 
-            # Uncomment following line to show raw marks.
-            # mark_detector.draw_marks(
-            #     frame, marks, color=(0, 255, 0))
+            # # Convert the marks locations from local CNN to global image.
+            # marks *= (facebox[2] - facebox[0])
+            # marks[:, 0] += facebox[0]
+            # marks[:, 1] += facebox[1]
 
-            # Try pose estimation with 68 points.
-            pose = pose_estimator.solve_pose_by_68_points(marks)
+            # # Uncomment following line to show raw marks.
+            # # mark_detector.draw_marks(
+            # #     frame, marks, color=(0, 255, 0))
 
-            # Stabilize the pose.
-            stabile_pose = []
-            pose_np = np.array(pose).flatten()
-            for value, ps_stb in zip(pose_np, pose_stabilizers):
-                ps_stb.update([value])
-                stabile_pose.append(ps_stb.state[0])
-            stabile_pose = np.reshape(stabile_pose, (-1, 3))
+            # # Try pose estimation with 68 points.
+            # pose = pose_estimator.solve_pose_by_68_points(marks)
 
-            # Uncomment following line to draw pose annotaion on frame.
+            # # Stabilize the pose.
+            # stabile_pose = []
+            # pose_np = np.array(pose).flatten()
+            # for value, ps_stb in zip(pose_np, pose_stabilizers):
+            #     ps_stb.update([value])
+            #     stabile_pose.append(ps_stb.state[0])
+            # stabile_pose = np.reshape(stabile_pose, (-1, 3))
+
+            # # Uncomment following line to draw pose annotaion on frame.
+            # # pose_estimator.draw_annotation_box(
+            # #     frame, pose[0], pose[1], color=(255, 128, 128))
+
+            # # Uncomment following line to draw stabile pose annotaion on frame.
             # pose_estimator.draw_annotation_box(
-            #     frame, pose[0], pose[1], color=(255, 128, 128))
-
-            # Uncomment following line to draw stabile pose annotaion on frame.
-            pose_estimator.draw_annotation_box(
-                frame, stabile_pose[0], stabile_pose[1], color=(128, 255, 128))
+            #     frame, stabile_pose[0], stabile_pose[1], color=(128, 255, 128))
 
         # Show preview.
         cv2.imshow("Preview", frame)
