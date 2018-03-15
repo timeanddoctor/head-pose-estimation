@@ -91,9 +91,14 @@ def main():
             face_img = cv2.cvtColor(face_img, cv2.COLOR_BGR2RGB)
             marks = mark_detector.detect_marks(face_img)
 
+            # Heatmap supression
+            heatmap = marks.transpose(2, 0, 1)
+            heatmap = heatmap - heatmap.min(axis=1).min(axis=1).reshape(68, 1, 1)
+            heatmap = heatmap - heatmap.min(axis=2).reshape(68, heatmap.shape[1], 1)
+
             # Preview heatmaps.
-            heatmap = np.sum(marks, axis=2)
-            heatmap = marks[:, :, 30]
+            # heatmap = np.sum(marks, axis=2)
+            heatmap = heatmap[48, :, :]
             max_y, max_x = np.unravel_index(np.argmax(heatmap, axis=None), heatmap.shape)
             heatmap = cv2.cvtColor(heatmap, cv2.COLOR_GRAY2BGR)
             cv2.circle(heatmap, (max_x, max_y), 1, (0,255,0))
