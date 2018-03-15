@@ -8,6 +8,7 @@ by solving a PnP problem.
 from multiprocessing import Process, Queue
 
 import numpy as np
+from scipy.ndimage import gaussian_filter
 
 import cv2
 from mark_detector import MarkDetector
@@ -93,45 +94,47 @@ def main():
 
             # Heatmap supression
             heatmap = marks.transpose(2, 0, 1)
-            heatmap = heatmap - heatmap.min(axis=1).min(axis=1).reshape(68, 1, 1)
-            heatmap = heatmap - heatmap.min(axis=2).reshape(68, heatmap.shape[1], 1)
+            heatmap = heatmap - \
+                heatmap.min(axis=1).min(axis=1).reshape(68, 1, 1)
+            heatmap = heatmap - \
+                heatmap.min(axis=2).reshape(68, heatmap.shape[1], 1)
+            heatmap = gaussian_filter(heatmap, sigma=0.5)
 
             # Preview heatmaps.
-            # heatmap = np.sum(marks, axis=2)
-            heatmap = heatmap[48, :, :]
-            max_y, max_x = np.unravel_index(np.argmax(heatmap, axis=None), heatmap.shape)
-            heatmap = cv2.cvtColor(heatmap, cv2.COLOR_GRAY2BGR)
-            cv2.circle(heatmap, (max_x, max_y), 1, (0,255,0))
-            heatmap_large = cv2.resize(heatmap, (512, 512), interpolation=cv2.INTER_AREA)
-            cv2.imshow("map", heatmap_large)
+            marks = []
+            for plain in heatmap:
+                max_y, max_x = np.unravel_index(
+                    np.argmax(plain, axis=None), plain.shape)
+                marks.append([max_x, max_y])
+            marks = np.reshape(marks, (-1, 2)) / 64
 
             # # Convert the marks locations from local CNN to global image.
-            # marks *= (facebox[2] - facebox[0])
-            # marks[:, 0] += facebox[0]
-            # marks[:, 1] += facebox[1]
+            marks *= (facebox[2] - facebox[0])
+            marks[:, 0] += facebox[0]
+            marks[:, 1] += facebox[1]
 
-            # # Uncomment following line to show raw marks.
-            # # mark_detector.draw_marks(
-            # #     frame, marks, color=(0, 255, 0))
+            # Uncomment following line to show raw marks.
+            # mark_detector.draw_marks(
+            #     frame, marks, color=(0, 255, 0))
 
-            # # Try pose estimation with 68 points.
-            # pose = pose_estimator.solve_pose_by_68_points(marks)
+            # Try pose estimation with 68 points.
+            pose = pose_estimator.solve_pose_by_68_points(marks)
 
-            # # Stabilize the pose.
-            # stabile_pose = []
-            # pose_np = np.array(pose).flatten()
-            # for value, ps_stb in zip(pose_np, pose_stabilizers):
-            #     ps_stb.update([value])
-            #     stabile_pose.append(ps_stb.state[0])
-            # stabile_pose = np.reshape(stabile_pose, (-1, 3))
+            # Stabilize the pose.
+            stabile_pose = []
+            pose_np = np.array(pose).flatten()
+            for value, ps_stb in zip(pose_np, pose_stabilizers):
+                ps_stb.update([value])
+                stabile_pose.append(ps_stb.state[0])
+            stabile_pose = np.reshape(stabile_pose, (-1, 3))
 
-            # # Uncomment following line to draw pose annotaion on frame.
-            # # pose_estimator.draw_annotation_box(
-            # #     frame, pose[0], pose[1], color=(255, 128, 128))
-
-            # # Uncomment following line to draw stabile pose annotaion on frame.
+            # Uncomment following line to draw pose annotaion on frame.
             # pose_estimator.draw_annotation_box(
-            #     frame, stabile_pose[0], stabile_pose[1], color=(128, 255, 128))
+            #     frame, pose[0], pose[1], color=(255, 128, 128))
+
+            # Uncomment following line to draw stabile pose annotaion on frame.
+            pose_estimator.draw_annotation_box(
+                frame, stabile_pose[0], stabile_pose[1], color=(128, 255, 128))
 
         # Show preview.
         cv2.imshow("Preview", frame)
